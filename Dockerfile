@@ -19,9 +19,8 @@ RUN \
 # Build usrsctp from sources
 RUN \
   cd /build && \
-  git clone https://github.com/sctplab/usrsctp && \
+  git clone --branch 0.9.5.0 https://github.com/sctplab/usrsctp && \
   cd usrsctp && \
-  git reset --hard 579e6dea765c593acaa8525f6280b85868c866fc && \
   cmake -DCMAKE_INSTALL_PREFIX:PATH=/usr/local . && \
   make -j$(nproc) && \
   make install
@@ -43,7 +42,7 @@ RUN \
 # Build libnice from sources as one shipped with ubuntu is a bit outdated
 RUN \
   cd /build && \
-  git clone --branch 0.1.22 https://gitlab.freedesktop.org/libnice/libnice.git && \
+  git clone --branch 0.1.21 https://gitlab.freedesktop.org/libnice/libnice.git && \
   cd libnice && \
   meson builddir && \
   ninja -C builddir && \
@@ -61,7 +60,7 @@ RUN \
 # See https://github.com/meetecho/janus-gateway/issues/2024
 RUN \
   cd /build && \
-  git clone --branch v2.3.0 https://github.com/cisco/libsrtp.git && \
+  git clone --branch v2.7.0 https://github.com/cisco/libsrtp.git && \
   cd libsrtp && \
   ./configure --prefix=/usr/local --enable-openssl && \
   make -j$(nproc) shared_library && \
@@ -91,7 +90,7 @@ RUN \
 # Build janus-gateway from sources
 RUN \
   cd /build && \
-  git clone --branch v1.2.3 https://github.com/meetecho/janus-gateway.git
+  git clone --branch v1.3.2 https://github.com/meetecho/janus-gateway.git
 RUN cd /build/janus-gateway && \
   sh autogen.sh && \
   ./configure --prefix=/usr/local \
