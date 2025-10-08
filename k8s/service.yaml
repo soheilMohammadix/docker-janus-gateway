@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: janus-gateway-service
+  namespace: janus-gateway
+  labels:
+    app: janus-gateway
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8088
+    targetPort: 8088
+    protocol: TCP
+    name: http-api
+  - port: 8188
+    targetPort: 8188
+    protocol: TCP
+    name: admin-api
+  - port: 8189
+    targetPort: 8189
+    protocol: TCP
+    name: websockets
+  selector:
+    app: janus-gateway
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: janus-gateway-udp
+  namespace: janus-gateway
+  labels:
+    app: janus-gateway
+spec:
+  type: ClusterIP
+  ports:
+  - port: 10000
+    targetPort: 10000
+    protocol: UDP
+    name: rtp-start
+  - port: 10099
+    targetPort: 10099
+    protocol: UDP
+    name: rtp-end
+  selector:
+    app: janus-gateway

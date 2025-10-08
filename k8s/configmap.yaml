@@ -1,0 +1,34 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: janus-config
+  namespace: janus-gateway
+data:
+  janus.jcfg: |
+    [general]
+    api_secret = "janusoverlord"
+    session_timeout = 60
+    debug_level = 4
+    debug_colors = true
+    
+    [nat]
+    stun_server = "stun.l.google.com"
+    stun_port = 19302
+    nice_debug = false
+    full_trickle = true
+    ice_lite = false
+    ice_tcp = false
+    ice_enforce_list = ""
+    ice_ignore_list = "vmnet"
+    
+    [media]
+    rtp_port_range = "10000-10099"
+    dtls_mtu = 1200
+    no_media_timer = 1
+    slowlink_threshold = 4
+    twcc_period = 200
+    
+    [plugins]
+    disable = "libjanus_audiobridge.so,libjanus_echotest.so,libjanus_nosip.so,libjanus_sip.so,libjanus_textroom.so,libjanus_voicemail.so"
+    transport = "libjanus_http.so,libjanus_websockets.so,libjanus_rabbitmq.so"
+    events = "libjanus_sampleevh.so,libjanus_rabbitmqevh.so,libjanus_gelfevh.so"

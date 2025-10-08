@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: janus-gateway
+  namespace: janus-gateway
+  labels:
+    app: janus-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: janus-gateway
+  template:
+    metadata:
+      labels:
+        app: janus-gateway
+    spec:
+      containers:
+      - name: janus
+        image: swmansion/janus-gateway:1.3.2-0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8088  # HTTP REST API
+          name: http-api
+        - containerPort: 8188  # Admin API
+          name: admin-api
+        - containerPort: 8189  # WebSockets
+          name: websockets
+        - containerPort: 10000  # RTP start
+          name: rtp-start
+        - containerPort: 10099  # RTP end
+          name: rtp-end
+          protocol: UDP
+        env:
+        - name: SERVER_NAME
+          value: "MyJanusInstance"
+        - name: DEBUG_LEVEL
+          value: "4"
+        - name: DEBUG_COLORS
+          value: "true"
+        - name: GATEWAY_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: STUN_SERVER
+          value: "stun.l.google.com"
+        - name: STUN_PORT
+          value: "19302"
+        - name: RTP_PORT_RANGE
+          value: "10000-10099"
+        - name: WEBSOCKETS_ENABLED
+          value: "true"
+        - name: WEBSOCKETS_PORT
+          value: "8189"
+        - name: PLUGIN_VIDEOROOM_ADMIN_KEY
+          valueFrom:
+            secretKeyRef:
+              name: janus-secrets
+              key: videoroom-admin-key
+        - name: PLUGIN_VIDEOROOM_EVENTS
+          value: "true"
+        - name: PLUGIN_VIDEOROOM_STRING_IDS
+          value: "false"
+        - name: PLUGIN_STREAMING_ADMIN_KEY
+          valueFrom:
+            secretKeyRef:
+              name: janus-secrets
+              key: streaming-admin-key
+        - name: PLUGIN_STREAMING_EVENTS
+          value: "true"
+        - name: PLUGIN_STREAMING_STRING_IDS
+          value: "false"
+        volumeMounts:
+        - name: janus-config
+          mountPath: /opt/janus/etc/janus/janus.jcfg
+          subPath: janus.jcfg
+        - name: recordings
+          mountPath: /opt/janus/share/janus/recordings
+        - name: logs
+          mountPath: /opt/janus/var/log
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /janus/info
+            port: 8088
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /janus/info
+            port: 8088
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: janus-config
+        configMap:
+          name: janus-config
+      - name: recordings
+        emptyDir: {}
+      - name: logs
+        emptyDir: {}
