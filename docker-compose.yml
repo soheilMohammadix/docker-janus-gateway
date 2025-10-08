@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  janus:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: swmansion/janus-gateway:1.3.2-0
+    container_name: janus-gateway
+    restart: unless-stopped
+    ports:
+      - "8088:8088"     # HTTP REST API
+      - "8188:8188"     # Admin API
+      - "8189:8189"     # WebSockets
+      - "10000-10099:10000-10099/udp"  # RTP/RTCP port range
+    environment:
+      # General settings
+      - SERVER_NAME=MyJanusInstance
+      - DEBUG_LEVEL=4
+      - DEBUG_COLORS=true
+      
+      # Network settings
+      - GATEWAY_IP=192.168.1.100  # Replace with your local IP
+      - STUN_SERVER=stun.l.google.com
+      - STUN_PORT=19302
+      - RTP_PORT_RANGE=10000-10099
+      
+      # WebSockets
+      - WEBSOCKETS_ENABLED=true
+      - WEBSOCKETS_PORT=8189
+      
+      # Optional: RabbitMQ (if you have a RabbitMQ service)
+      # - RABBITMQ_ENABLED=false
+      # - RABBITMQ_HOST=rabbitmq
+      # - RABBITMQ_PORT=5672
+      # - RABBITMQ_USERNAME=guest
+      # - RABBITMQ_PASSWORD=guest
+      
+      # Optional: GELF event handler (if you have a Graylog instance)
+      # - GELF_EVENTHANDLER_ENABLED=false
+      # - GELF_EVENTHANDLER_BACKEND=graylog.example.com
+      # - GELF_EVENTHANDLER_PORT=12201
+      
+      # VideoRoom plugin settings
+      - PLUGIN_VIDEOROOM_ADMIN_KEY=supersecret
+      - PLUGIN_VIDEOROOM_EVENTS=true
+      - PLUGIN_VIDEOROOM_STRING_IDS=false
+      
+      # Streaming plugin settings  
+      - PLUGIN_STREAMING_ADMIN_KEY=supersecret
+      - PLUGIN_STREAMING_EVENTS=true
+      - PLUGIN_STREAMING_STRING_IDS=false
+      
+    volumes:
+      - ./configs:/opt/janus/etc/janus  # Mount custom configs
+      - ./recordings:/opt/janus/share/janus/recordings  # Mount recordings directory
+      - ./logs:/opt/janus/var/log  # Mount logs directory
+    
+    networks:
+      - janus-network
+
+networks:
+  janus-network:
+    driver: bridge

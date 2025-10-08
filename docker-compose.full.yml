@@ -1,0 +1,219 @@
+version: '3.8'
+
+services:
+  janus:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: swmansion/janus-gateway:1.3.2-0
+    container_name: janus-gateway-full
+    restart: unless-stopped
+    ports:
+      - "8088:8088"     # HTTP REST API
+      - "8188:8188"     # Admin API
+      - "8189:8189"     # WebSockets
+      - "10000-10099:10000-10099/udp"  # RTP/RTCP port range
+    environment:
+      # General settings
+      - SERVER_NAME=JanusGateway-Full
+      - DEBUG_LEVEL=4
+      - DEBUG_COLORS=true
+      - DEBUG_LOCKS=false
+      
+      # Network settings
+      - GATEWAY_IP=${GATEWAY_IP:-192.168.1.100}
+      - STUN_SERVER=stun.l.google.com
+      - STUN_PORT=19302
+      - RTP_PORT_RANGE=10000-10099
+      - DTLS_MTU=1200
+      - NO_MEDIA_TIMER=1
+      - SLOWLINK_THRESHOLD=4
+      - TWCC_PERIOD=200
+      
+      # ICE settings
+      - NICE_DEBUG=false
+      - FULL_TRICKLE=true
+      - ICE_LITE=false
+      - ICE_TCP=false
+      - ICE_ENFORCE_LIST=
+      - ICE_IGNORE_LIST=vmnet
+      
+      # WebSockets
+      - WEBSOCKETS_ENABLED=true
+      - WEBSOCKETS_EVENTS=true
+      - WEBSOCKETS_JSON=indented
+      - WEBSOCKETS_PORT=8189
+      - WEBSOCKETS_PINGPONG_TRIGGER=30
+      - WEBSOCKETS_PINGPONG_TIMEOUT=5
+      
+      # RabbitMQ transport
+      - RABBITMQ_ENABLED=true
+      - RABBITMQ_EVENTS=true
+      - RABBITMQ_JSON=indented
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=janus
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-janus123}
+      - RABBITMQ_VHOST=janus
+      - RABBITMQ_TO_JANUS=to-janus
+      - RABBITMQ_FROM_JANUS=from-janus
+      - RABBITMQ_EXCHANGE=janus-exchange
+      - RABBITMQ_EXCHANGE_TYPE=direct
+      
+      # RabbitMQ event handler
+      - RABBITMQ_EVENTHANDLER_ENABLED=true
+      - RABBITMQ_EVENTHANDLER_EVENTS=all
+      - RABBITMQ_EVENTHANDLER_GROUPING=true
+      - RABBITMQ_EVENTHANDLER_JSON=indented
+      - RABBITMQ_EVENTHANDLER_HOST=rabbitmq
+      - RABBITMQ_EVENTHANDLER_PORT=5672
+      - RABBITMQ_EVENTHANDLER_USERNAME=janus
+      - RABBITMQ_EVENTHANDLER_PASSWORD=${RABBITMQ_PASSWORD:-janus123}
+      - RABBITMQ_EVENTHANDLER_VHOST=janus
+      - RABBITMQ_EVENTHANDLER_ROUTE_KEY=from-janus-event
+      - RABBITMQ_EVENTHANDLER_EXCHANGE=janus-events
+      - RABBITMQ_EVENTHANDLER_EXCHANGE_TYPE=topic
+      
+      # GELF event handler (optional - requires Graylog)
+      - GELF_EVENTHANDLER_ENABLED=false
+      - GELF_EVENTHANDLER_EVENTS=all
+      - GELF_EVENTHANDLER_BACKEND=graylog
+      - GELF_EVENTHANDLER_PORT=12201
+      - GELF_EVENTHANDLER_PROTOCOL=udp
+      - GELF_EVENTHANDLER_MAX_MESSAGE_LEN=1024
+      - GELF_EVENTHANDLER_COMPRESS=true
+      - GELF_EVENTHANDLER_COMPRESSION=6
+      
+      # VideoRoom plugin
+      - PLUGIN_VIDEOROOM_ADMIN_KEY=${VIDEOROOM_ADMIN_KEY:-supersecret}
+      - PLUGIN_VIDEOROOM_EVENTS=true
+      - PLUGIN_VIDEOROOM_LOCK_RTP_FORWARD=true
+      - PLUGIN_VIDEOROOM_STRING_IDS=false
+      - PLUGIN_VIDEOROOM_EXTRA=
+      
+      # Streaming plugin
+      - PLUGIN_STREAMING_ADMIN_KEY=${STREAMING_ADMIN_KEY:-supersecret}
+      - PLUGIN_STREAMING_EVENTS=true
+      - PLUGIN_STREAMING_STRING_IDS=false
+      - PLUGIN_STREAMING_EXTRA=
+      
+      # Recording settings
+      - RECORDINGS_TMP_EXT=tmp
+      - RECORDINGS_DIR=/opt/janus/share/janus/recordings
+      
+      # Authentication
+      - ADMIN_SECRET=${ADMIN_SECRET:-janusoverlord}
+      
+    volumes:
+      - ./configs:/opt/janus/etc/janus:ro
+      - ./recordings:/opt/janus/share/janus/recordings
+      - ./logs:/opt/janus/var/log
+    depends_on:
+      - rabbitmq
+    networks:
+      - janus-full-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088/janus/info"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: janus-rabbitmq-full
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"  # Management UI
+    environment:
+      - RABBITMQ_DEFAULT_USER=janus
+      - RABBITMQ_DEFAULT_PASSWORD=${RABBITMQ_PASSWORD:-janus123}
+      - RABBITMQ_DEFAULT_VHOST=janus
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+    networks:
+      - janus-full-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: Redis for caching and session storage
+  redis:
+    image: redis:7-alpine
+    container_name: janus-redis-full
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis123}
+    volumes:
+      - redis_data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - janus-full-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: Nginx reverse proxy with SSL termination
+  nginx:
+    image: nginx:alpine
+    container_name: janus-nginx-full
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./html:/usr/share/nginx/html:ro
+    depends_on:
+      - janus
+    networks:
+      - janus-full-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: Graylog for centralized logging
+  graylog:
+    image: graylog/graylog:5.2
+    container_name: janus-graylog
+    restart: unless-stopped
+    ports:
+      - "9000:9000"   # Graylog web interface
+      - "12201:12201/udp"  # GELF UDP input
+      - "1514:1514/udp"    # Syslog UDP input
+    environment:
+      - GRAYLOG_PASSWORD_SECRET=${GRAYLOG_PASSWORD_SECRET:-somepasswordpepper}
+      - GRAYLOG_ROOT_PASSWORD_SHA2=${GRAYLOG_ROOT_PASSWORD_SHA2:-8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918}
+      - GRAYLOG_HTTP_EXTERNAL_URI=http://localhost:9000/
+    volumes:
+      - graylog_data:/usr/share/graylog/data
+      - ./graylog/config:/usr/share/graylog/data/config:ro
+    networks:
+      - janus-full-network
+
+volumes:
+  rabbitmq_data:
+    driver: local
+  redis_data:
+    driver: local
+  graylog_data:
+    driver: local
+
+networks:
+  janus-full-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
